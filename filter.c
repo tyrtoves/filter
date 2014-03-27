@@ -2,66 +2,59 @@
 #include<unistd.h>
 #include<malloc.h>
 #include<string.h>
+#include<stdlib.h>
 
-void filter (char* command) {
+void filter (char** argv) {
 
-	FILE *fd = popen(command, "r");
-	if (fd == NULL) {
-		perror(command);
+	int filedes[2];
+
+	if (pipe(filedes) < 0) {
+	    printf("PIPE");
+	    return;
+	}
+	
+	int PID = fork();
+	
+	if (PID < 0) { 
+		perror("FORK");
+		return;	
+	}
+	if (PID == 0){
+	
+		close(filedes[0]);
+		dup2(filedes[1], 1);
+		
+		if (execvp(argv[1], argv + 1) == -1) {
+			perror("EXEC");
+			return;
+		}
+		
+		close (filedes[1]);
 		return;
 	}
 	
-	char cur_c;
-	
-	char* buf = malloc(1);	
-	
-	int count = 0;
-	
-	if (buf == NULL) {
-		perror(buf);
-		pclose(fd);
-		return;
-	}
-	
-	cur_c = fgetc(fd);
-	
-	while (!feof(fd)) {
-		buf[0] = cur_c;
-		write(1, buf, 1);
-		if (cur_c == '\n')
-			count++;
-			cur_c = fgetc(fd);
-	}
-	
-	printf("Count = %d\n", count);
-	
-	pclose(fd);
+    else { 
+    
+        close(filedes[1]);
+        int count = 0, pos = 0;
+        char buf[500];
+		
+		while ( ( pos = read(filedes[0], buf, 500) ) != 0) {
+			write(1, buf, pos);
+			int i;
+			for (i = 0; i < pos; ++i)
+				if (buf[i] == '\n')
+					++count;
+		}
+		
+		printf("%d\n", count);
+    }
 }
 
 
 int main(int argc, char* argv[]) {
-
-	int i = 0, result_len = 0;
-
-	if (argc < 2) {
-		fprintf(stderr, "Too few arguments");
-		return 1;
-	}
 	
-	for (i = 1; i < argc; i++)
-		result_len += strlen(argv[i]) + 1;
-		
-	char* arguments = malloc(result_len);
-	
-	for (i = 1; i < argc - 1; ++i) {	
-		strcat(arguments, argv[i]);
-		strcat(arguments, " ");
-	}
-	
-	strcat(arguments, argv[i]);
-	arguments[result_len - 1] = 0;
-	
-	filter(arguments);
+	filter(argv);
 	
 	return 0;
 }
